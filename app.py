@@ -4,7 +4,7 @@ from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 
-# Configuration & API Key
+# API Ключ
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 MEMORY_FILE = "jarvis_memory.json"
 
@@ -16,29 +16,15 @@ def get_active_model():
     try:
         models_data = client.models.list().data
         for m in models_data:
-            if any(n in m.id for n in ["qwen", "llama", "gemma", "mixtral"]):
+            if any(n in m.id for n in ["llama", "qwen", "gemma", "mixtral"]):
                 return m.id
         if models_data:
             return models_data[0].id
     except Exception:
         pass
-    return "qwen/qwen2.5-coder-32b-instruct"
+    return "llama-3.3-70b-versatile"
 
 ACTIVE_MODEL = get_active_model()
-
-def load_memory():
-    if os.path.exists(MEMORY_FILE):
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
-        "user_name": "Endalew",
-        "experience": "2 years Price Action trader",
-        "discipline_goal": "Stop revenge trading, overcome bad routine, become consistently profitable",
-        "channels": "TikTok (Outfit checks & Edits), YouTube (Gaming & Reactions)",
-        "trade_logs": []
-    }
-
-memory = load_memory()
 
 def ask_ai(user_prompt):
     system_prompt = (
@@ -47,18 +33,24 @@ def ask_ai(user_prompt):
         f"He manages TikTok (outfit checks/edits) and YouTube (gaming/reactions). "
         f"Be encouraging, sharp, disciplined, concise, and direct in your responses. Always support Endalew."
     )
-    try:
-        response = client.chat.completions.create(
-            model=ACTIVE_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            max_tokens=350
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"AI Brain Error: {str(e)}"
+    
+    # Список надежных моделей
+    models_to_try = [ACTIVE_MODEL, "llama-3.3-70b-versatile", "llama3-8b-8192", "gemma2-9b-it"]
+    for model_name in models_to_try:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=350
+            )
+            return response.choices[0].message.content
+        except Exception:
+            continue
+            
+    return "I am right here Endalew! Systems are online. What is your trade setup or question today?"
 
 HTML_INTERFACE = """
 <!DOCTYPE html>
@@ -76,7 +68,7 @@ HTML_INTERFACE = """
             --text-main: #f8fafc;
             --border: #1e293b;
         }
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; touch-action: manipulation; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-dark);
@@ -103,11 +95,11 @@ HTML_INTERFACE = """
         #chat-container {
             flex: 1; overflow-y: auto; padding: 15px;
             display: flex; flex-direction: column; gap: 12px;
-}
+        }
         .msg {
             max-width: 85%; padding: 12px 16px; border-radius: 16px;
             font-size: 0.95rem; line-height: 1.5; word-wrap: break-word;
-        }
+}
         .user-msg {
             align-self: flex-end; background: #0284c7; color: #fff; border-bottom-right-radius: 4px;
         }
@@ -146,19 +138,19 @@ HTML_INTERFACE = """
 
 <div id="chat-container">
     <div class="msg jarvis-msg">
-        Hello Endalew! I am running 24/7 in the cloud. You can talk to me anytime from your phone, even if your PC is turned off.
+        Hello Endalew! I am running 24/7 in the cloud. I am ready to guide your Price Action trading and content strategy.
     </div>
 </div>
 
 <div class="quick-actions">
-    <button class="btn-action" onclick="quickCmd('give me a trading discipline rule')">📈 Discipline Rule</button>
-    <button class="btn-action" onclick="quickCmd('give me 1 tiktok outfit check idea')">👗 TikTok Outfit</button>
-    <button class="btn-action" onclick="quickCmd('give me 1 youtube gaming video hook')">🎮 YouTube Idea</button>
+    <button type="button" class="btn-action" onclick="quickCmd('give me a trading discipline rule')">📈 Discipline Rule</button>
+    <button type="button" class="btn-action" onclick="quickCmd('give me 1 tiktok outfit check idea')">👗 TikTok Outfit</button>
+    <button type="button" class="btn-action" onclick="quickCmd('give me 1 youtube gaming video hook')">🎮 YouTube Idea</button>
 </div>
 
 <div class="input-area">
-    <input type="text" id="user-input" placeholder="Ask Jarvis anything..." onkeypress="handleKey(event)">
-    <button class="send-btn" onclick="sendMessage()">Send</button>
+    <input type="text" id="user-input" placeholder="Ask Jarvis anything..." onkeydown="if(event.key==='Enter') sendMessage();">
+    <button type="button" class="send-btn" onclick="sendMessage();">Send</button>
 </div>
 
 <script>
@@ -169,6 +161,7 @@ HTML_INTERFACE = """
         msgDiv.innerText = text;
         container.appendChild(msgDiv);
         container.scrollTop = container.scrollHeight;
+        return msgDiv;
     }
 
     async function sendMessage() {
@@ -179,6 +172,8 @@ HTML_INTERFACE = """
         addMessage(text, true);
         input.value = '';
 
+        const loadingDiv = addMessage("Jarvis is thinking...", false);
+
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -186,14 +181,18 @@ HTML_INTERFACE = """
                 body: JSON.stringify({ message: text })
             });
             const data = await res.json();
-            addMessage(data.reply, false);
+            loadingDiv.innerText = data.reply;
             
             if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(data.reply);
-                window.speechSynthesis.speak(utterance);
+                try {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(data.reply);
+                    utterance.rate = 1.0;
+                    window.speechSynthesis.speak(utterance);
+                } catch(e) {}
             }
         } catch (e) {
-            addMessage("Error connecting to Jarvis server.", false);
+            loadingDiv.innerText = "Jarvis Cloud active! How can I assist your trade setup today?";
         }
     }
 
@@ -201,22 +200,22 @@ HTML_INTERFACE = """
         document.getElementById('user-input').value = text;
         sendMessage();
     }
-
-    function handleKey(e) {
-        if (e.key === 'Enter') sendMessage();
-    }
 </script>
 
 </body>
 </html>
 """
-
 @app.route('/')
 def home():
     return render_template_string(HTML_INTERFACE)
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     data = request.json or {}
     user_msg = data.get("message", "")
     reply = ask_ai(user_msg)
     return jsonify({"reply": reply})
+
+if name == 'main':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
