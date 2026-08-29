@@ -4,7 +4,7 @@ from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 
-# Используем API ключ
+# Configuration & API Key
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 MEMORY_FILE = "jarvis_memory.json"
 
@@ -220,7 +220,3 @@ def chat():
     user_msg = data.get("message", "")
     reply = ask_ai(user_msg)
     return jsonify({"reply": reply})
-
-if name == 'main':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
