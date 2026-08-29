@@ -4,29 +4,23 @@ from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 
-# API Ключ
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+# Получаем ключ из переменных окружения Render
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 MEMORY_FILE = "jarvis_memory.json"
 
 app = Flask("jarvis_cloud_app")
 CORS(app)
-client = Groq(api_key=GROQ_API_KEY)
 
-def get_active_model():
-    try:
-        models_data = client.models.list().data
-        for m in models_data:
-            if any(n in m.id for n in ["llama", "qwen", "gemma", "mixtral"]):
-                return m.id
-        if models_data:
-            return models_data[0].id
-    except Exception:
-        pass
-    return "llama-3.3-70b-versatile"
-
-ACTIVE_MODEL = get_active_model()
+def get_client():
+    if not GROQ_API_KEY:
+        return None
+    return Groq(api_key=GROQ_API_KEY)
 
 def ask_ai(user_prompt):
+    client = get_client()
+    if not client:
+        return "Jarvis Error: GROQ_API_KEY is not set in Render environment variables."
+        
     system_prompt = (
         f"You are Jarvis, Endalew's personal elite Price Action trading mentor, emotional discipline coach, and content co-pilot. "
         f"Endalew has 2 years of trading experience working to overcome bad trading habits and reach profitability. "
@@ -34,8 +28,7 @@ def ask_ai(user_prompt):
         f"Be encouraging, sharp, disciplined, concise, and direct in your responses. Always support Endalew."
     )
     
-    # Список надежных моделей
-    models_to_try = [ACTIVE_MODEL, "llama-3.3-70b-versatile", "llama3-8b-8192", "gemma2-9b-it"]
+    models_to_try = ["llama-3.3-70b-versatile", "llama3-8b-8192", "gemma2-9b-it"]
     for model_name in models_to_try:
         try:
             response = client.chat.completions.create(
@@ -50,7 +43,7 @@ def ask_ai(user_prompt):
         except Exception:
             continue
             
-    return "I am right here Endalew! Systems are online. What is your trade setup or question today?"
+    return "Hello Endalew! I am online. How is your price action chart setup looking right now?"
 
 HTML_INTERFACE = """
 <!DOCTYPE html>
@@ -99,13 +92,13 @@ HTML_INTERFACE = """
         .msg {
             max-width: 85%; padding: 12px 16px; border-radius: 16px;
             font-size: 0.95rem; line-height: 1.5; word-wrap: break-word;
-}
+        }
         .user-msg {
             align-self: flex-end; background: #0284c7; color: #fff; border-bottom-right-radius: 4px;
         }
         .jarvis-msg {
             align-self: flex-start; background: var(--card-bg); border: 1px solid var(--border);
-            color: #e2e8f0; border-bottom-left-radius: 4px;
+color: #e2e8f0; border-bottom-left-radius: 4px;
         }
         .quick-actions {
             display: flex; gap: 8px; padding: 10px 15px; background: #080c14; overflow-x: auto;
@@ -192,7 +185,7 @@ HTML_INTERFACE = """
                 } catch(e) {}
             }
         } catch (e) {
-            loadingDiv.innerText = "Jarvis Cloud active! How can I assist your trade setup today?";
+            loadingDiv.innerText = "Jarvis Cloud active! What trade setup are we analyzing today?";
         }
     }
 
@@ -205,6 +198,7 @@ HTML_INTERFACE = """
 </body>
 </html>
 """
+
 @app.route('/')
 def home():
     return render_template_string(HTML_INTERFACE)
@@ -215,7 +209,6 @@ def chat():
     user_msg = data.get("message", "")
     reply = ask_ai(user_msg)
     return jsonify({"reply": reply})
-
 if name == 'main':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
