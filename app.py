@@ -3,7 +3,6 @@ from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 
-# Получаем ключ из переменных окружения Render или вшитого ключа
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
 
 app = Flask("jarvis_cloud_app")
@@ -22,31 +21,29 @@ def ask_ai(user_prompt):
         f"Be encouraging, sharp, disciplined, concise, and direct in your responses. Always support Endalew."
     )
     
-    # Список 100% действующих бесплатных моделей Groq
-    models_to_try = [
-        "llama-3.1-8b-instant",
-        "llama3-8b-8192",
-        "gemma2-9b-it",
-        "mixtral-8x7b-32768"
-    ]
-    
-    last_err = ""
-    for model_name in models_to_try:
-        try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=350
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            last_err = str(e)
-            continue
-            
-    return f"AI Error: {last_err}"
+    # Динамическое получение активных моделей с Groq
+    active_model = "llama-3.1-8b-instant"
+    try:
+        models_data = client.models.list().data
+        for m in models_data:
+            if "llama" in m.id or "gemma" in m.id:
+                active_model = m.id
+                break
+    except Exception:
+        pass
+
+    try:
+        response = client.chat.completions.create(
+            model=active_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=350
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"AI Error: {str(e)}"
 
 @app.route('/')
 def home():
@@ -95,8 +92,8 @@ def home():
             button {
                 background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
                 border: none; color: #000; font-weight: bold; padding: 12px 36px; border-radius: 24px; font-size: 1rem; cursor: pointer;
-}
-            #reply {
+            }
+#reply {
                 margin-top: 25px; width: 90%; max-width: 450px; background: var(--card-bg);
                 border: 1px solid var(--border); padding: 18px; border-radius: 16px;
                 font-size: 1rem; line-height: 1.5; color: #38bdf8; text-align: left;
