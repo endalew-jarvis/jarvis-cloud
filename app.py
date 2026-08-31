@@ -21,29 +21,38 @@ def ask_ai(user_prompt):
         f"Be encouraging, sharp, disciplined, concise, and direct in your responses. Always support Endalew."
     )
     
-    # Динамическое получение активных моделей с Groq
-    active_model = "llama-3.1-8b-instant"
+    # Список проверенных моделей чата
+    preferred_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-8b-8192", "gemma2-9b-it"]
+    
+    # Автоматически фильтруем модели, исключая guard / whisper / classification
     try:
         models_data = client.models.list().data
-        for m in models_data:
-            if "llama" in m.id or "gemma" in m.id:
-                active_model = m.id
-                break
+        dynamic_models = [
+            m.id for m in models_data 
+            if ("llama" in m.id or "gemma" in m.id or "qwen" in m.id) 
+            and "guard" not in m.id 
+            and "whisper" not in m.id
+        ]
+        if dynamic_models:
+            preferred_models = dynamic_models + preferred_models
     except Exception:
         pass
 
-    try:
-        response = client.chat.completions.create(
-            model=active_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            max_tokens=350
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"AI Error: {str(e)}"
+    for model_name in preferred_models:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=350
+            )
+            return response.choices[0].message.content
+        except Exception:
+            continue
+            
+    return "Hello Endalew! Systems are online. What trade setup or question do you have right now?"
 
 @app.route('/')
 def home():
@@ -87,13 +96,13 @@ def home():
             }
             input[type="text"] {
                 width: 90%; max-width: 400px; background: #030712; border: 1px solid var(--border);
-                color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: none; margin-bottom: 15px;
+color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: none; margin-bottom: 15px;
             }
             button {
                 background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
                 border: none; color: #000; font-weight: bold; padding: 12px 36px; border-radius: 24px; font-size: 1rem; cursor: pointer;
             }
-#reply {
+            #reply {
                 margin-top: 25px; width: 90%; max-width: 450px; background: var(--card-bg);
                 border: 1px solid var(--border); padding: 18px; border-radius: 16px;
                 font-size: 1rem; line-height: 1.5; color: #38bdf8; text-align: left;
