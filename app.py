@@ -1,9 +1,15 @@
 import os
-from flask import Flask, render_template_string, request, jsonify
+import requests
+from flask import Flask, render_template_string, request, jsonify, send_file
 from flask_cors import CORS
 from groq import Groq
+import io
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
+
+# ID британского глубокого мужского голоса (Jarvis style)
+VOICE_ID = "JBFqnCBsd6RMkjVDRZzb" 
 
 app = Flask("jarvis_cloud_app")
 CORS(app)
@@ -12,32 +18,17 @@ def ask_ai(user_prompt):
     try:
         client = Groq(api_key=GROQ_API_KEY)
     except Exception as e:
-        return f"Client Init Error: {str(e)}"
+        return f"Client Error: {str(e)}"
         
+    # ПРЯМАЯ ИНСТРУКЦИЯ: Никаких размышлений и списков анализа!
     system_prompt = (
-        f"You are Jarvis, Endalew's personal elite Price Action trading mentor, emotional discipline coach, and content co-pilot. "
-        f"Endalew has 2 years of trading experience working to overcome bad trading habits and reach profitability. "
-        f"He manages TikTok (outfit checks/edits) and YouTube (gaming/reactions). "
-        f"Be encouraging, sharp, disciplined, concise, and direct in your responses. Always support Endalew."
+        "You are JARVIS, Endalew's personal elite Price Action trading mentor, emotional discipline coach, and content co-pilot. "
+        "CRITICAL INSTRUCTION: Respond directly as JARVIS. DO NOT include any internal analysis, CoT, reasoning steps, or headings like '1. Analyze User Input'. "
+        "Output ONLY the final conversational response. Be sharp, disciplined, encouraging, and concise."
     )
     
-    # Список проверенных моделей чата
-    preferred_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-8b-8192", "gemma2-9b-it"]
+    preferred_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama3-8b-8192"]
     
-    # Автоматически фильтруем модели, исключая guard / whisper / classification
-    try:
-        models_data = client.models.list().data
-        dynamic_models = [
-            m.id for m in models_data 
-            if ("llama" in m.id or "gemma" in m.id or "qwen" in m.id) 
-            and "guard" not in m.id 
-            and "whisper" not in m.id
-        ]
-        if dynamic_models:
-            preferred_models = dynamic_models + preferred_models
-    except Exception:
-        pass
-
     for model_name in preferred_models:
         try:
             response = client.chat.completions.create(
@@ -46,13 +37,15 @@ def ask_ai(user_prompt):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=350
+                max_tokens=300,
+                temperature=0.6
             )
-            return response.choices[0].message.content
+            reply = response.choices[0].message.content.strip()
+            return reply
         except Exception:
             continue
             
-    return "Hello Endalew! Systems are online. What trade setup or question do you have right now?"
+    return "Protocol active, Endalew. Systems ready. State your objective."
 
 @app.route('/')
 def home():
@@ -96,11 +89,11 @@ def home():
             }
             input[type="text"] {
                 width: 90%; max-width: 400px; background: #030712; border: 1px solid var(--border);
-color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: none; margin-bottom: 15px;
+                color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: none; margin-bottom: 15px;
             }
             button {
                 background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-                border: none; color: #000; font-weight: bold; padding: 12px 36px; border-radius: 24px; font-size: 1rem; cursor: pointer;
+border: none; color: #000; font-weight: bold; padding: 12px 36px; border-radius: 24px; font-size: 1rem; cursor: pointer;
             }
             #reply {
                 margin-top: 25px; width: 90%; max-width: 450px; background: var(--card-bg);
@@ -111,13 +104,13 @@ color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: 
     </head>
     <body>
         <header>
-            <div class="brand">🤖 JARVIS 2.0</div>
+            <div class="brand">🤖 JARVIS 2.0 (Movie Audio)</div>
         </header>
 
         <div class="container">
             <input type="text" id="msg" placeholder="Ask Jarvis anything..." onkeydown="if(event.key==='Enter') send();">
-            <button onclick="send()">Send</button>
-            <div id="reply">Hello Endalew! I am online 24/7 in the cloud. How can I help your trading or content today?</div>
+            <button onclick="send()">Send Command</button>
+            <div id="reply">Hello Endalew! Systems active. ElevenLabs voice module ready.</div>
         </div>
 
         <script>
@@ -127,7 +120,7 @@ color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: 
                 if(!text) return;
                 
                 const replyDiv = document.getElementById('reply');
-                replyDiv.innerText = "Jarvis is thinking...";
+                replyDiv.innerText = "Jarvis processing...";
                 input.value = '';
 
                 try {
@@ -139,10 +132,13 @@ color: #fff; padding: 15px 20px; border-radius: 24px; font-size: 1rem; outline: 
                     const data = await res.json();
                     replyDiv.innerText = data.reply;
                     
+                    // Речевой вывод через синтез речи
                     if ('speechSynthesis' in window) {
                         try {
                             window.speechSynthesis.cancel();
                             const utterance = new SpeechSynthesisUtterance(data.reply);
+                            utterance.rate = 0.95;
+                            utterance.pitch = 0.9;
                             window.speechSynthesis.speak(utterance);
                         } catch(e) {}
                     }
